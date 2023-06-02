@@ -73,7 +73,7 @@ public class OrbitHandler : MonoBehaviour
         //Vector3 velocity = new Vector3(0.0f, 7.5460f, 0.0f);
 
         // Ellipse around equator
-        Vector3 position = new Vector3(420.0f, 0.0f, 7000.0f);
+        Vector3 position = new Vector3(7000.0f, 0.0f, 0.0f);
         Vector3 velocity = new Vector3(7.0f, 7.5460f, 0.0f);
 
         // Ellipse with some inclination
