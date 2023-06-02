@@ -4,11 +4,12 @@ using UnityEngine;
 
 public class OrbitHandler : MonoBehaviour
 {
+    // Types of orbits
     public enum OrbitTypes
     {
         CIRCULAR,
         ELLIPTICAL,
-        PARABLOIC,
+        PARABOLIC,
         HYPERBOLIC,
     }
 
@@ -43,12 +44,25 @@ public class OrbitHandler : MonoBehaviour
 
     void Start()
     {
+        // References
+        // https://orbital-mechanics.space/intro.html
+        // Orbital Mechanics for Engineering Students, Third Edition, Howard Curtis
+
+        // Note : This script uses x,y as the reference plane
+        // Note : This script is relative to orbital body, will not move with planet/sun/moon. This can be fixed by adding orbital body position to all positions
+
+        // Using this script will create any orbit you need, mOrbitType (public property) will tell you what kind of orbit it generates
+        // Ellipsoid
+        // Circular
+        // Hyperbolic
+        // Parabolic
+
         // Initial Conditions
         // mu
         // position
         // velocity
         // number of points in path
-        float mu = 398600f;
+        float mu = 398600f;                                             // This is a constant depending on the body you orbit, this is for Earth, the sun would be 132712000000
 
         // Hyperbolic
         //Vector3 position = new Vector3(-6000.0f, -3605.6f, 0.0f);
@@ -59,12 +73,12 @@ public class OrbitHandler : MonoBehaviour
         //Vector3 velocity = new Vector3(0.0f, 7.5460f, 0.0f);
 
         // Ellipse around equator
-        //Vector3 position = new Vector3(7000.0f, 0.0f, 0.0f);
-        //Vector3 velocity = new Vector3(7.0f, 7.5460f, 0.0f);
+        Vector3 position = new Vector3(420.0f, 0.0f, 7000.0f);
+        Vector3 velocity = new Vector3(7.0f, 7.5460f, 0.0f);
 
         // Ellipse with some inclination
-        Vector3 position = new Vector3(-6045.0f, -3490.0f, 2500.0f);
-        Vector3 velocity = new Vector3(-3.457f, 6.618f, 2.533f);
+        //Vector3 position = new Vector3(-6045.0f, -3490.0f, 2500.0f);
+        //Vector3 velocity = new Vector3(-3.457f, 6.618f, 2.533f);
 
         // set methods
         mScale = 1.0f / 1000.0f;                                        // I am going to scale everything down to 1/1000th, this is arbitrary and can be anything. I just didn't want to move the camera much to fit everything in screen
@@ -72,31 +86,29 @@ public class OrbitHandler : MonoBehaviour
         setPosition(position);
         setVelocity(velocity);
         calculateOrbitalElements();
-        generatePath(200);
-        setGameObjectLineRenderer();
-        setGameObjectPosition();
-    }
-
-    // Update is called once per frame
-    void Update()
-    {
-        
+        generatePath(200);                                              // I use a method that will have great accuracy near the planet and less accuracy at the furtherest points, I would need to write something special to fix this
+        setGameObjectLineRenderer();                                    // Graphical object for the Orbit
+        setGameObjectPosition();                                        // A game object should have the orbit script attached to it
     }
 
     // Generate the path/orbit of object
     void generatePath(int aNumberOfPoints)
     {
+        // This method will produce a disproportiant set of points near periapsis instead of eavenly around the whole orbit
+        // I would have to update this to a different method for an evenly space set of points
+
         int segments = aNumberOfPoints;
         Vector3[] points = new Vector3[segments + 1];
         float deltaAngle = 2.0f * Mathf.PI / segments;
         float angle = 0.0f;
 
+        // Hyperbolic and Parabolic orbits have special angle they sweep through
         if (mOrbitType == OrbitTypes.HYPERBOLIC)
         {
             deltaAngle = mTrueAnomolyInfinity * 0.97f * 2.0f / segments;
             angle = -1.0f * mTrueAnomolyInfinity * 0.97f;
         }
-        else if (mOrbitType == OrbitTypes.PARABLOIC)
+        else if (mOrbitType == OrbitTypes.PARABOLIC)
         {
             deltaAngle = Mathf.PI * 0.90f * 2.0f / segments;
             angle = -1.0f * Mathf.PI * 0.90f;
@@ -104,14 +116,17 @@ public class OrbitHandler : MonoBehaviour
 
         for (int i = 0; i < segments; i++)
         {
+            // Fundamental range equation
             float localRange = (mH * mH / mMu) / (1.0f + mE * Mathf.Cos(angle));
             float perifocalX = localRange * Mathf.Cos(angle);
             float perifocalY = localRange * Mathf.Sin(angle);
             angle = angle + deltaAngle;
-            //Debug.LogFormat("localRange = {0}", localRange);
+
+            // rotate from perifocal frame to the state vector
             points[i] = rotatePerifocalVectorToStateVector(new Vector3(perifocalX, perifocalY, 0.0f));
         }
 
+        // Allow for the line rendered to create a closed loop
         if (mOrbitType == OrbitTypes.CIRCULAR || mOrbitType == OrbitTypes.ELLIPTICAL)
         {
             points[segments] = points[0];
@@ -127,6 +142,7 @@ public class OrbitHandler : MonoBehaviour
     // calculate methods
     void calculateOrbitalElements()
     {
+        // Calculate all orbital elements associated with orbit, this order is especially important
         calculateAngularMomentum();
         calculateInclination();
         calculateEccentricity();
@@ -140,12 +156,14 @@ public class OrbitHandler : MonoBehaviour
 
     void calculateAngularMomentum()
     {
+        // Angular momentum is conserved
         Vector3 angMom = Vector3.Cross(mPosition, mVelocity);
         setAngularMomentum(angMom);
     }
 
     void calculateNodeLine()
     {
+        // Node line is 0 at inclinations 0 and 180, set nominal value
         if (mInclination % Mathf.PI == 0.0f)
         {
             setNodeLine(new Vector3(1.0f, 0.0f, 0.0f));
@@ -159,6 +177,11 @@ public class OrbitHandler : MonoBehaviour
 
     void calculateEccentricity()
     {
+        // Eccentricity tells you have squished the orbit is
+        // e = 0            -- Circular
+        // e = 1            -- Parabolic
+        // e > 1            -- Hyperbolic
+        // e > 0 && e < 1.0 -- Elliptical
         float vro = Vector3.Dot(mPosition, mVelocity) / mR;
         Vector3 ecc = 1.0f / mMu * ((Mathf.Pow(mV, 2) - mMu / mR) * mPosition - mR * vro * mVelocity);
         setEccentricity(ecc);
@@ -220,6 +243,7 @@ public class OrbitHandler : MonoBehaviour
 
     void calculateTrueAnomalyInfinity()
     {
+        // only used for parabolic and hyperbolic orbits
         float taInf = 0.0f;
         if (mOrbitType == OrbitTypes.HYPERBOLIC)
         {
@@ -299,7 +323,7 @@ public class OrbitHandler : MonoBehaviour
         }
         else if (mE > 1.0f-error && mE <= 1.0+error)
         {
-            mOrbitType = OrbitTypes.PARABLOIC;
+            mOrbitType = OrbitTypes.PARABOLIC;
         }
         else
         {
@@ -310,7 +334,7 @@ public class OrbitHandler : MonoBehaviour
     void setInclination(float aInclination)
     {
         // inclination is between 0 and 180 degrees
-        mInclination = Mathf.Clamp(aInclination, 0.0f, Mathf.PI);
+        mInclination = aInclination;
     }
 
     void setRightAscention(float aRightAscention)
@@ -352,6 +376,7 @@ public class OrbitHandler : MonoBehaviour
     // other functions
     float calculateAngleThroughDot(Vector3 aVec1, Vector3 aVec2)
     {
+        // This returns an angle between 2 vectors with some error checking to make sure no NaN appears in acos as the input must be [0,1] inclusive
         float error = 0.0001f;
         float mag1 = aVec1.magnitude;
         float mag2 = aVec2.magnitude;
@@ -382,7 +407,7 @@ public class OrbitHandler : MonoBehaviour
 
     void calculatePerifocal2GeocentricEquatorialTransformation()
     {
-        // Rotation from perifocal frame to the geocentric equitorial frame
+        // Rotation from perifocal frame to the geocentric equitorial frame rotation matrix
         float raS = Mathf.Sin(mRightAscention);
         float raC = Mathf.Cos(mRightAscention);
         float iS = Mathf.Sin(mInclination);
@@ -405,6 +430,7 @@ public class OrbitHandler : MonoBehaviour
 
     Vector3 rotatePerifocalVectorToStateVector(Vector3 aPerifocalFrame)
     {
+        // rotate frame and scale for line renderer
         Vector3 stateVectorFull = new Vector3(mRotationMatrix[0, 0] * aPerifocalFrame.x + mRotationMatrix[0, 1] * aPerifocalFrame.y + mRotationMatrix[0, 2] * aPerifocalFrame.z,
                                               mRotationMatrix[1, 0] * aPerifocalFrame.x + mRotationMatrix[1, 1] * aPerifocalFrame.y + mRotationMatrix[1, 2] * aPerifocalFrame.z,
                                               mRotationMatrix[2, 0] * aPerifocalFrame.x + mRotationMatrix[2, 1] * aPerifocalFrame.y + mRotationMatrix[2, 2] * aPerifocalFrame.z);
